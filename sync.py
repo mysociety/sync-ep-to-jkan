@@ -1,11 +1,33 @@
 #!/usr/bin/env python
-# encoding: utf-8
+# -*- coding: utf-8 -*-
+
+from __future__ import print_function
+from future.standard_library import install_aliases
+install_aliases()
+
+from urllib.parse import urlparse, urlencode
+from urllib.request import urlopen, Request
+from urllib.error import HTTPError
 
 import os
 import urllib
 import urllib2
 import json
 from datetime import datetime
+
+data = {
+    "channel": os.environ['SLACK_NOTIFY_CHANNEL'],
+    "text": "Notified of EveryPolitician data update, beginning sync to CKAN!",
+}
+
+try:
+    req = Request(os.environ['SLACK_BOT_URL'])
+    req.add_header('Content-Type', 'application/json')
+
+    response = urlopen(req, json.dumps(data).encode('utf-8'))
+except HTTPError as e:
+    error_message = e.read()
+    print(error_message)
 
 EP_COUNTRIES_URL = os.environ['EP_COUNTRIES_URL']
 CKAN_API_ENDPOINT = os.environ['CKAN_API_ENDPOINT']
@@ -22,15 +44,21 @@ FORCE_RESOURCE_REBUILD = bool(os.environ['FORCE_RESOURCE_REBUILD'])
 response = urllib2.urlopen(EP_COUNTRIES_URL)
 ep_countries = json.load(response)
 
+if FORCE_UPDATE:
+    print('RUNNING WITH FORCED UPDATES')
+
+if FORCE_RESOURCE_REBUILD:
+    print('RUNNING WITH FORCED RESOURCE REBUILDS')
+
 for country in ep_countries:
     print('Country ' + country['name'])
 
     for legislature in country['legislatures']:
 
         name = country['slug'].lower() + '-' + legislature['slug'].lower()
-        title = country['name'] + ': ' + legislature['name']
+        title = country['name'].encode('utf-8') + ': ' + legislature['name'].encode('utf-8')
 
-        print('\tLegislature ' + legislature['name'])
+        print('\tLegislature ' + legislature['name'].encode('utf-8'))
         print('\t\t' + name)
         print('\t\t' + title)
 
@@ -88,10 +116,11 @@ for country in ep_countries:
 
             # Do we actually need to update this?
 
-            if (existing_dataset['version'] != dataset['version'] or FORCE_UPDATE):
+            if (str(existing_dataset['version']) != str(dataset['version']) or FORCE_UPDATE):
 
                 try:
-                    print '\t\t\tNeeds update, patching!'
+                    print('\t\t\tNeeds update, patching!')
+                    print('\t\t\tCurrent: ' + existing_dataset['version'] + ' New: ' + dataset['version'])
                     request = urllib2.Request(
                         CKAN_API_ENDPOINT + 'action/package_patch')
                     request.add_header('Authorization', CKAN_API_KEY)
@@ -103,18 +132,18 @@ for country in ep_countries:
                     existing_dataset = response_json['result']
 
                 except urllib2.URLError, e:
-                    print '\t\t\tERROR: ' + str(e.code)
-                    print '\t\t\t' + e.read()
+                    print('\t\t\tERROR: ' + str(e.code))
+                    print('\t\t\t' + e.read())
                     raise
 
             else:
-                print '\t\t\tMetadata version matches, no update needed!'
+                print('\t\t\tMetadata version matches, no update needed!')
                 update_resources = False
 
         except urllib2.URLError, e:
 
             if e.code == 404:
-                print '\t\t\tDoes not exist, creating dataset!'
+                print('\t\t\tDoes not exist, creating dataset!')
                 request = urllib2.Request(
                     CKAN_API_ENDPOINT + 'action/package_create')
                 request.add_header('Authorization', CKAN_API_KEY)
@@ -126,8 +155,8 @@ for country in ep_countries:
                 existing_dataset = response_json['result']
             else:
                 # This wasn't a 404, so it's probably dangerous
-                print '\t\t\tERROR: ' + str(e.code)
-                print '\t\t\t' + e.read()
+                print('\t\t\tERROR: ' + str(e.code))
+                print('\t\t\t' + e.read())
                 raise
 
         # By this point, we definitely have a dataset object, and it's
@@ -172,7 +201,7 @@ for country in ep_countries:
                 })
 
             for resource in resources:
-                print('\t\t\t\t' + resource['name'])
+                print('\t\t\t\t' + resource['name'].encode('utf-8'))
                 data_string = urllib2.quote(json.dumps(resource))
                 try:
                     request = urllib2.Request(
@@ -181,5 +210,5 @@ for country in ep_countries:
                     response = urllib2.urlopen(request, data_string)
                     assert response.code is 200
                 except urllib2.URLError, e:
-                    print '\t\t\t\tERROR: ' + str(e.code)
-                    print '\t\t\t\t' + e.read()
+                    print('\t\t\t\tERROR: ' + str(e.code))
+                    print('\t\t\t\t' + e.read())
