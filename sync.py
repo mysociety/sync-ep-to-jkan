@@ -36,10 +36,10 @@ CKAN_EP_ORG = os.environ['CKAN_EP_ORG']
 CKAN_LICENSE_ID = os.environ['CKAN_LICENSE_ID']
 
 # This will force metadata and resource updates, even if versions match
-FORCE_UPDATE = bool(os.environ['FORCE_UPDATE'])
+FORCE_UPDATE = bool(int(os.environ['FORCE_UPDATE']))
 
 # This will force a complete rebuild of resources
-FORCE_RESOURCE_REBUILD = bool(os.environ['FORCE_RESOURCE_REBUILD'])
+FORCE_RESOURCE_REBUILD = bool(int(os.environ['FORCE_RESOURCE_REBUILD']))
 
 response = urllib2.urlopen(EP_COUNTRIES_URL)
 ep_countries = json.load(response)
@@ -51,7 +51,7 @@ if FORCE_RESOURCE_REBUILD:
     print('RUNNING WITH FORCED RESOURCE REBUILDS')
 
 for country in ep_countries:
-    print('Country ' + country['name'])
+    print('Country ' + country['name'].encode('utf-8'))
 
     for legislature in country['legislatures']:
 
