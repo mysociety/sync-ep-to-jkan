@@ -7,7 +7,7 @@ import urllib2
 import json
 from datetime import datetime
 
-EP_COUNTRIES_URL = os.environ['CKAN_COUNTRIES_URL']
+EP_COUNTRIES_URL = os.environ['EP_COUNTRIES_URL']
 CKAN_API_ENDPOINT = os.environ['CKAN_API_ENDPOINT']
 CKAN_API_KEY = os.environ['CKAN_API_KEY']
 CKAN_EP_ORG = os.environ['CKAN_EP_ORG']
