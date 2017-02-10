@@ -82,7 +82,6 @@ def sync():
                 # resolved later on)
 
                 dataset = {
-                    'id': name,
                     'name': name,
                     'title': title,
                     'state': 'active',
@@ -104,9 +103,6 @@ def sync():
                     dataset['resources'] = []
 
                 # This is where we do gnarly things
-
-                # Use the json module to dump the dictionary to a string for posting.
-                data_string = urllib2.quote(json.dumps(dataset))
 
                 # Does the dataset actually exist in the first place?
 
@@ -133,6 +129,11 @@ def sync():
                         try:
                             print('\t\t\tNeeds update, patching!')
                             print('\t\t\tCurrent: ' + existing_dataset['version'] + ' New: ' + dataset['version'])
+
+                            # We need to add the ID
+                            dataset['id'] = existing_dataset['id']
+                            data_string = urllib2.quote(json.dumps(dataset))
+
                             request = urllib2.Request(
                                 CKAN_API_ENDPOINT + 'action/package_patch')
                             request.add_header('Authorization', CKAN_API_KEY)
@@ -156,12 +157,19 @@ def sync():
 
                     if e.code == 404:
                         print('\t\t\tDoes not exist, creating dataset!')
-                        request = urllib2.Request(
-                            CKAN_API_ENDPOINT + 'action/package_create')
-                        request.add_header('Authorization', CKAN_API_KEY)
-                        response = urllib2.urlopen(request, data_string)
+                        try:
+                            data_string = urllib2.quote(json.dumps(dataset))
+                            request = urllib2.Request(
+                                CKAN_API_ENDPOINT + 'action/package_create')
+                            request.add_header('Authorization', CKAN_API_KEY)
+                            response = urllib2.urlopen(request, data_string)
 
-                        assert response.code is 201
+                        except urllib2.URLError, e:
+                            print('\t\t\t\tERROR: ' + str(e.code))
+                            print('\t\t\t\t' + e.read())
+                            raise
+
+                        assert response.code is 200
 
                         response_json = json.load(response)
                         existing_dataset = response_json['result']
