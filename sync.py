@@ -6,60 +6,76 @@ from future.standard_library import install_aliases
 
 install_aliases()
 
-from urllib.parse import urlencode
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError
-
 import os
-import urllib2
-import json
-from datetime import datetime
 
 from flask import Flask
 from flask import Response
 
+from urllib.request import urlopen, Request
+from urllib.error import HTTPError
+
+import urllib2
+import json
+from datetime import datetime
+
+from git import Repo
+from git import Actor
+
+
+GITHUB_JKAN_URL = os.environ['GITHUB_JKAN_URL']
+REPO_DIR = os.environ['REPO_DIR']
+EP_COUNTRIES_URL = os.environ['EP_COUNTRIES_URL']
+EP_ORG_NAME = os.environ['EP_ORG_NAME']
+SLACK_NOTIFY_CHANNEL = os.environ['SLACK_NOTIFY_CHANNEL']
+SLACK_BOT_URL = os.environ['SLACK_BOT_URL']
+
+
 app = Flask(__name__)
+
 
 # Here's the magic
 @app.route('/sync')
 def sync():
 
-    data = {
-        "channel": os.environ['SLACK_NOTIFY_CHANNEL'],
-        "text": "Notified of EveryPolitician data update, beginning sync to CKAN!",
-    }
+    def sync_to_jkan():
 
-    try:
-        req = Request(os.environ['SLACK_BOT_URL'])
-        req.add_header('Content-Type', 'application/json')
+        yield '<h1>EveryPolitician to JKAN Sync</h1>'
 
-        response = urlopen(req, json.dumps(data).encode('utf-8'))
-    except HTTPError as e:
-        error_message = e.read()
-        print(error_message)
+        data = {
+            "channel": SLACK_NOTIFY_CHANNEL,
+            "text": "Notified of EveryPolitician data update, beginning sync to JKAN!",
+        }
 
-    EP_COUNTRIES_URL = os.environ['EP_COUNTRIES_URL']
-    CKAN_API_ENDPOINT = os.environ['CKAN_API_ENDPOINT']
-    CKAN_API_KEY = os.environ['CKAN_API_KEY']
-    CKAN_EP_ORG = os.environ['CKAN_EP_ORG']
-    CKAN_LICENSE_ID = os.environ['CKAN_LICENSE_ID']
+        try:
+            req = Request(SLACK_BOT_URL)
+            req.add_header('Content-Type', 'application/json')
 
-    # This will force metadata and resource updates, even if versions match
-    FORCE_UPDATE = bool(int(os.environ['FORCE_UPDATE']))
+            response = urlopen(req, json.dumps(data).encode('utf-8'))
+        except HTTPError as e:
+            error_message = e.read()
+            print(error_message)
 
-    # This will force a complete rebuild of resources
-    FORCE_RESOURCE_REBUILD = bool(int(os.environ['FORCE_RESOURCE_REBUILD']))
+        # Check to see if the repo directory exists.
+        if not os.path.isdir(REPO_DIR):
 
-    response = urllib2.urlopen(EP_COUNTRIES_URL)
-    ep_countries = json.load(response)
+            # No repo? Clone the JKAN directory.
+            Repo.clone_from(GITHUB_JKAN_URL, REPO_DIR)
 
-    if FORCE_UPDATE:
-        print('RUNNING WITH FORCED UPDATES')
+        # Initialise the repository object
+        repo = Repo(REPO_DIR)
 
-    if FORCE_RESOURCE_REBUILD:
-        print('RUNNING WITH FORCED RESOURCE REBUILDS')
+        # Move the HEAD to the gh-pages branch
+        pages_branch = repo.create_head('gh-pages')
+        repo.head.reference = pages_branch
+        # Reset the index and working tree to match the pointed-to commit
+        repo.head.reset(index=True, working_tree=True)
 
-    def sync_to_ckan():
+        # Pull so we're up to date
+        repo.remotes.origin.pull()
+
+        # Get the EP countries
+        response = urllib2.urlopen(EP_COUNTRIES_URL)
+        ep_countries = json.load(response)
 
         for country in ep_countries:
             yield '<p>Working on country ' + country['name'].encode('utf-8') + '.</p>'
@@ -67,173 +83,79 @@ def sync():
 
             for legislature in country['legislatures']:
 
-                name = country['slug'].lower() + '-' + legislature['slug'].lower()
-                title = country['name'].encode('utf-8') + ': ' + legislature['name'].encode('utf-8')
-
+                yield '<p>Working on legislature ' + legislature['name'].encode('utf-8') + '.</p>'
                 print('\tLegislature ' + legislature['name'].encode('utf-8'))
-                print('\t\t' + name)
-                print('\t\t' + title)
 
-                # We start out assuming resources need updating.
-                update_resources = True
+                name = 'everypolitician-' + country['slug'].lower() + '-' + legislature['slug'].lower()
+                title = country['name'].encode('utf-8') + ' — ' + legislature['name'].encode('utf-8')
 
-                # Build up the dataset we want. This will be patched in, so things we
-                # don't specify here remain unchanged (like resources, which are
-                # resolved later on)
+                content = """---
+schema: default
+title: """ + title + """
+organization: """ + EP_ORG_NAME + """
+notes: Data on the people within the """ + legislature['name'].encode('utf-8') + """ legislature of """ + country['name'].encode('utf-8') + """.
+resources:
+  - name: All Data as Popolo JSON
+    url: >-
+      """ + legislature['popolo_url'].encode('utf-8') + """
+    format: json"""
 
-                dataset = {
-                    'name': name,
-                    'title': title,
-                    'state': 'active',
-                    'notes': 'Data on the people within the "' + legislature['name'] + '" legislature of ' + country['name'] + '.',
-                    'owner_org': CKAN_EP_ORG,
-                    'author': 'EveryPolitician',
-                    'author_email': 'team@everypolitician.org',
-                    'maintainer': 'EveryPolitician',
-                    'maintainer_email': 'team@everypolitician.org',
-                    'license_id': CKAN_LICENSE_ID,
-                    'url': 'http://everypolitician.org/' + country['slug'].lower() + '/',
-                    'version': legislature['lastmod'],
-                    'tags': [
-                        {'name': 'everypolitician'}
-                    ]
-                }
+                for period in legislature['legislative_periods']:
 
-                if FORCE_RESOURCE_REBUILD:
-                    dataset['resources'] = []
-
-                # This is where we do gnarly things
-
-                # Does the dataset actually exist in the first place?
-
-                try:
-                    package_get_data = {
-                        'id': name
-                    }
-                    request = urllib2.Request(
-                        CKAN_API_ENDPOINT + 'action/package_show?' + urlencode(package_get_data))
-                    request.add_header('Authorization', CKAN_API_KEY)
-                    response = urllib2.urlopen(request)
-
-                    assert response.code is 200
-
-                    response_json = json.load(response)
-                    existing_dataset = response_json['result']
-
-                    # All going well, got a 200, resource exists!
-
-                    # Do we actually need to update this?
-
-                    if (str(existing_dataset['version']) != str(dataset['version']) or FORCE_UPDATE):
-
-                        try:
-                            print('\t\t\tNeeds update, patching!')
-                            print('\t\t\tCurrent: ' + existing_dataset['version'] + ' New: ' + dataset['version'])
-
-                            # We need to add the ID
-                            dataset['id'] = existing_dataset['id']
-                            data_string = urllib2.quote(json.dumps(dataset))
-
-                            request = urllib2.Request(
-                                CKAN_API_ENDPOINT + 'action/package_patch')
-                            request.add_header('Authorization', CKAN_API_KEY)
-                            response = urllib2.urlopen(request, data_string)
-
-                            assert response.code is 200
-
-                            response_json = json.load(response)
-                            existing_dataset = response_json['result']
-
-                        except urllib2.URLError, e:
-                            print('\t\t\tERROR: ' + str(e.code))
-                            print('\t\t\t' + e.read())
-                            raise
-
+                    if 'end_date' in period:
+                        date_string = period['start_date'] + ' to ' + period['end_date']
                     else:
-                        print('\t\t\tMetadata version matches, no update needed!')
-                        update_resources = False
+                        date_string = 'From ' + period['start_date']
 
-                except urllib2.URLError, e:
+                    content += """
+  - name: """ + date_string.encode('utf-8') + """
+    url: >-
+      """ + period['csv_url'].encode('utf-8') + """
+    format: csv"""
 
-                    if e.code == 404:
-                        print('\t\t\tDoes not exist, creating dataset!')
-                        try:
-                            data_string = urllib2.quote(json.dumps(dataset))
-                            request = urllib2.Request(
-                                CKAN_API_ENDPOINT + 'action/package_create')
-                            request.add_header('Authorization', CKAN_API_KEY)
-                            response = urllib2.urlopen(request, data_string)
+                content += """
+last_modified: """ + datetime.fromtimestamp(int(legislature['lastmod'])).isoformat() + """
+license: ''
+category:
+  - """ + country['name'].encode('utf-8') + """
+  - People
+  - Groups & Bodies
+maintainer: EveryPolitician
+maintainer_email: team@everypolitician.org
+---
+"""
 
-                        except urllib2.URLError, e:
-                            print('\t\t\t\tERROR: ' + str(e.code))
-                            print('\t\t\t\t' + e.read())
-                            raise
+                with open(REPO_DIR + '/_datasets/' + name + '.md', 'w') as file:
+                    file.write(content)
 
-                        assert response.code is 200
+        # Add all the tracked files to the repo. Do this using native git.
+        repo.git.add(A=True)
 
-                        response_json = json.load(response)
-                        existing_dataset = response_json['result']
-                    else:
-                        # This wasn't a 404, so it's probably dangerous
-                        print('\t\t\tERROR: ' + str(e.code))
-                        print('\t\t\t' + e.read())
-                        raise
+        # Commit the index.
+        index = repo.index
 
-                # By this point, we definitely have a dataset object, and it's
-                # definitely up to date.
+        if index.diff('HEAD'):
 
-                # Here we do some gnarly magic to create a simple list for turning a
-                # name into a CKAN ID. CKAN resources cannot (apparently) have custom
-                # IDs.
+            author = Actor("EveryPolitician", "team@everypolitician.org")
+            committer = Actor("DataBot", "data@mysociety.org")
+            # commit by commit message and author and committer
+            index.commit("Update EveryPolitician data", author=author, committer=committer)
 
-                if update_resources:
+            yield '<p>Committed changes.</p>'
+            print('Committed changes')
 
-                    print('\t\t\tUpdating resources...')
+            # Push it!
+            repo.remotes.origin.push()
 
-                    resources = []
+            yield '<p>Pushed changes.</p>'
+            print('Pushed changes')
 
-                    resources.append({
-                        'id': 'popolo',
-                        'package_id': existing_dataset['id'],
-                        'name': 'All Data as Popolo JSON',
-                        'format': 'JSON',
-                        'mimetype': 'application/json',
-                        'url': legislature['popolo_url'],
-                        'last_modified': datetime.fromtimestamp(int(legislature['lastmod'])).isoformat()
-                    })
+        else:
 
-                    for period in legislature['legislative_periods']:
+            yield '<p>Skipping commit, there is no difference.</p>'
+            print('Skipping commit, there is no difference')
 
-                        if 'end_date' in period:
-                            date_string = period['start_date'] + ' to ' + period['end_date']
-                        else:
-                            date_string = 'From ' + period['start_date']
-
-                        resources.append({
-                            'package_id': existing_dataset['id'],
-                            'id': 'period-' + period['slug'],
-                            'name': period['name'],
-                            'format': 'CSV',
-                            'mimetype': 'text/csv',
-                            'url': period['csv_url'],
-                            'description': date_string,
-                            'last_modified': datetime.fromtimestamp(int(legislature['lastmod'])).isoformat()
-                        })
-
-                    for resource in resources:
-                        print('\t\t\t\t' + resource['name'].encode('utf-8'))
-                        data_string = urllib2.quote(json.dumps(resource))
-                        try:
-                            request = urllib2.Request(
-                                CKAN_API_ENDPOINT + 'action/resource_create')
-                            request.add_header('Authorization', CKAN_API_KEY)
-                            response = urllib2.urlopen(request, data_string)
-                            assert response.code is 200
-                        except urllib2.URLError, e:
-                            print('\t\t\t\tERROR: ' + str(e.code))
-                            print('\t\t\t\t' + e.read())
-
-    return Response(sync_to_ckan(), 'text/html')
+    return Response(sync_to_jkan(), 'text/html')
 
 # Fire it up!
 if __name__ == "__main__":
