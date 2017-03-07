@@ -155,7 +155,10 @@ maintainer_email: team@everypolitician.org
             yield '<p>Skipping commit, there is no difference.</p>'
             print('Skipping commit, there is no difference')
 
-    return Response(sync_to_jkan(), 'text/html')
+    return Response(
+        response=sync_to_jkan(),
+        mimetype='text/html'
+    )
 
 # Fire it up!
 if __name__ == "__main__":
