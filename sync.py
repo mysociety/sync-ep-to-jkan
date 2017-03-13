@@ -22,12 +22,15 @@ from git import Repo
 from git import Actor
 
 
+EP_COUNTRIES_URL = os.environ['EP_COUNTRIES_URL']
+EP_MAINTAINER_EMAIL = os.environ['EP_MAINTAINER_EMAIL']
+EP_MAINTAINER_NAME = os.environ['EP_MAINTAINER_NAME']
+EP_MORE_INFO_URL = os.environ['EP_MORE_INFO_URL']
+EP_ORG_NAME = os.environ['EP_ORG_NAME']
 GITHUB_JKAN_URL = os.environ['GITHUB_JKAN_URL']
 REPO_DIR = os.environ['REPO_DIR']
-EP_COUNTRIES_URL = os.environ['EP_COUNTRIES_URL']
-EP_ORG_NAME = os.environ['EP_ORG_NAME']
-SLACK_NOTIFY_CHANNEL = os.environ['SLACK_NOTIFY_CHANNEL']
 SLACK_BOT_URL = os.environ['SLACK_BOT_URL']
+SLACK_NOTIFY_CHANNEL = os.environ['SLACK_NOTIFY_CHANNEL']
 
 
 app = Flask(__name__)
@@ -120,8 +123,9 @@ category:
   - """ + country['name'].encode('utf-8') + """
   - People
   - Groups & Bodies
-maintainer: EveryPolitician
-maintainer_email: team@everypolitician.org
+maintainer: """ + EP_MAINTAINER_NAME + """
+maintainer_email: """ + EP_MAINTAINER_EMAIL + """
+more_info: """ + EP_MORE_INFO_URL + """
 ---
 """
 
