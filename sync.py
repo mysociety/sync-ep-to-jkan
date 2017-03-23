@@ -37,7 +37,7 @@ app = Flask(__name__)
 
 
 # Here's the magic
-@app.route('/sync')
+@app.route('/sync', methods=['GET', 'POST'])
 def sync():
 
     def sync_to_jkan():
