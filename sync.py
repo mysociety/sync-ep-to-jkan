@@ -10,6 +10,7 @@ import os
 
 from flask import Flask
 from flask import Response
+from flask import request
 
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError
@@ -20,6 +21,8 @@ from datetime import datetime
 
 from git import Repo
 from git import Actor
+
+import pprint
 
 
 EP_COUNTRIES_URL = os.environ['EP_COUNTRIES_URL']
@@ -40,9 +43,22 @@ app = Flask(__name__)
 @app.route('/sync', methods=['GET', 'POST'])
 def sync():
 
-    def sync_to_jkan():
+    def sync_to_jkan(payload):
 
         yield '<h1>EveryPolitician to JKAN Sync</h1>'
+
+        yield '<h2>Payload</h2>'
+
+        yield '<pre>'
+
+        print('PAYLOAD:')
+        print(payload)
+
+        yield pprint.pformat(payload)
+
+        yield '</pre>'
+
+        yield '<h2>Actions</h2>'
 
         data = {
             "channel": SLACK_NOTIFY_CHANNEL,
@@ -160,7 +176,7 @@ more_info: """ + EP_MORE_INFO_URL + """
             print('Skipping commit, there is no difference')
 
     return Response(
-        response=sync_to_jkan(),
+        response=sync_to_jkan(request.get_json()),
         mimetype='text/html'
     )
 
