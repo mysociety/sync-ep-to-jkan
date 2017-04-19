@@ -123,7 +123,7 @@ resources:
     url: 'http://docs.everypolitician.org/use_the_data.html'
     format: info
   - name: View on EveryPolitician
-    url: 'http://everypolitician.org/""" + country['slug'].lower() + """/'
+    url: 'http://everypolitician.org/""" + country['slug'].lower().encode('utf-8') + """/'
     format: info
   - name: All Data as Popolo JSON
     url: >-
