@@ -97,6 +97,11 @@ def sync():
         ep_countries = json.load(response)
 
         for country in ep_countries:
+
+            if country['slug'] == 'UK':
+                print('Skipping UK!')
+                return
+
             yield '<p>Working on country ' + country['name'].encode('utf-8') + '.</p>'
             print('Country ' + country['name'].encode('utf-8'))
 
