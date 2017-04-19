@@ -100,20 +100,21 @@ def sync():
 
             if country['slug'] == 'UK':
                 print('Skipping UK!')
-                return
 
-            yield '<p>Working on country ' + country['name'].encode('utf-8') + '.</p>'
-            print('Country ' + country['name'].encode('utf-8'))
+            else:
 
-            for legislature in country['legislatures']:
+                yield '<p>Working on country ' + country['name'].encode('utf-8') + '.</p>'
+                print('Country ' + country['name'].encode('utf-8'))
 
-                yield '<p>Working on legislature ' + legislature['name'].encode('utf-8') + '.</p>'
-                print('\tLegislature ' + legislature['name'].encode('utf-8'))
+                for legislature in country['legislatures']:
 
-                name = 'everypolitician-' + country['slug'].lower() + '-' + legislature['slug'].lower()
-                title = country['name'].encode('utf-8') + ' — ' + legislature['name'].encode('utf-8')
+                    yield '<p>Working on legislature ' + legislature['name'].encode('utf-8') + '.</p>'
+                    print('\tLegislature ' + legislature['name'].encode('utf-8'))
 
-                content = """---
+                    name = 'everypolitician-' + country['slug'].lower() + '-' + legislature['slug'].lower()
+                    title = country['name'].encode('utf-8') + ' — ' + legislature['name'].encode('utf-8')
+
+                    content = """---
 schema: default
 title: Politician Data: """ + title + """
 organization: """ + EP_ORG_NAME + """
@@ -130,14 +131,14 @@ resources:
       """ + legislature['popolo_url'].encode('utf-8') + """
     format: json"""
 
-                for period in legislature['legislative_periods']:
+                    for period in legislature['legislative_periods']:
 
-                    if 'end_date' in period:
-                        date_string = period['start_date'] + ' to ' + period['end_date']
-                    else:
-                        date_string = 'From ' + period['start_date']
+                        if 'end_date' in period:
+                            date_string = period['start_date'] + ' to ' + period['end_date']
+                        else:
+                            date_string = 'From ' + period['start_date']
 
-                    content += """
+                        content += """
   - name: """ + period['name'].encode('utf-8') + """: """ + date_string.encode('utf-8') + """
     url: >-
       """ + period['csv_url'].encode('utf-8') + """
