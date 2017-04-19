@@ -115,10 +115,16 @@ def sync():
 
                 content = """---
 schema: default
-title: """ + title + """
+title: Politician Data: """ + title + """
 organization: """ + EP_ORG_NAME + """
 notes: Data on the people within the """ + legislature['name'].encode('utf-8') + """ legislature of """ + country['name'].encode('utf-8') + """.
 resources:
+  - name: How To Use The Data
+    url: 'http://docs.everypolitician.org/use_the_data.html'
+    format: info
+  - name: View on EveryPolitician
+    url: 'http://everypolitician.org/""" + country['slug'].lower() + """/'
+    format: info
   - name: All Data as Popolo JSON
     url: >-
       """ + legislature['popolo_url'].encode('utf-8') + """
@@ -132,12 +138,18 @@ resources:
                         date_string = 'From ' + period['start_date']
 
                     content += """
-  - name: """ + date_string.encode('utf-8') + """
+  - name: """ + period['name'].encode('utf-8') + """: """ + date_string.encode('utf-8') + """
     url: >-
       """ + period['csv_url'].encode('utf-8') + """
     format: csv"""
 
                 content += """
+  - name: Python
+    url: 'https://github.com/everypolitician/everypolitician-popolo-python'
+    format: library
+  - name: Ruby
+    url: 'https://github.com/everypolitician/everypolitician-popolo'
+    format: library
 last_modified: """ + datetime.fromtimestamp(int(legislature['lastmod'])).isoformat() + """
 license: ''
 category:
