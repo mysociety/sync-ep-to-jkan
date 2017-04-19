@@ -116,7 +116,7 @@ def sync():
 
                     content = """---
 schema: default
-title: Politician Data: """ + title + """
+title: 'Politician Data: """ + title + """'
 organization: """ + EP_ORG_NAME + """
 notes: Data on the people within the """ + legislature['name'].encode('utf-8') + """ legislature of """ + country['name'].encode('utf-8') + """.
 resources:
@@ -139,7 +139,7 @@ resources:
                             date_string = 'From ' + period['start_date']
 
                         content += """
-  - name: """ + period['name'].encode('utf-8') + """: """ + date_string.encode('utf-8') + """
+  - name: '""" + period['name'].encode('utf-8') + """: """ + date_string.encode('utf-8') + """'
     url: >-
       """ + period['csv_url'].encode('utf-8') + """
     format: csv"""
