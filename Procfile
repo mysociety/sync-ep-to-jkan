@@ -1,1 +1,1 @@
-web: python sync.py
+worker: python sync.py

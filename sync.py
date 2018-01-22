@@ -8,10 +8,6 @@ install_aliases()
 
 import os
 
-from flask import Flask
-from flask import Response
-from flask import request
-
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError
 
@@ -36,85 +32,65 @@ SLACK_BOT_URL = os.environ['SLACK_BOT_URL']
 SLACK_NOTIFY_CHANNEL = os.environ['SLACK_NOTIFY_CHANNEL']
 
 
-app = Flask(__name__)
+def sync_to_jkan():
 
+    print('EveryPolitician to JKAN Sync')
 
-# Here's the magic
-@app.route('/sync', methods=['GET', 'POST'])
-def sync():
+    print('Actions')
 
-    def sync_to_jkan(payload):
+    data = {
+        "channel": SLACK_NOTIFY_CHANNEL,
+        "text": "Running scheduled sync of EveryPolitician to JKAN!",
+    }
 
-        yield '<h1>EveryPolitician to JKAN Sync</h1>'
+    try:
+        req = Request(SLACK_BOT_URL)
+        req.add_header('Content-Type', 'application/json')
 
-        yield '<h2>Payload</h2>'
+        response = urlopen(req, json.dumps(data).encode('utf-8'))
+    except HTTPError as e:
+        error_message = e.read()
+        print(error_message)
 
-        yield '<pre>'
+    # Check to see if the repo directory exists.
+    if not os.path.isdir(REPO_DIR):
 
-        print('PAYLOAD:')
-        print(payload)
+        # No repo? Clone the JKAN directory.
+        Repo.clone_from(GITHUB_JKAN_URL, REPO_DIR)
 
-        yield pprint.pformat(payload)
+    # Initialise the repository object
+    repo = Repo(REPO_DIR)
 
-        yield '</pre>'
+    # Move the HEAD to the gh-pages branch
+    pages_branch = repo.create_head('gh-pages')
+    repo.head.reference = pages_branch
+    # Reset the index and working tree to match the pointed-to commit
+    repo.head.reset(index=True, working_tree=True)
 
-        yield '<h2>Actions</h2>'
+    # Pull so we're up to date
+    repo.remotes.origin.pull()
 
-        data = {
-            "channel": SLACK_NOTIFY_CHANNEL,
-            "text": "Notified of EveryPolitician data update, beginning sync to JKAN!",
-        }
+    # Get the EP countries
+    response = urllib2.urlopen(EP_COUNTRIES_URL)
+    ep_countries = json.load(response)
 
-        try:
-            req = Request(SLACK_BOT_URL)
-            req.add_header('Content-Type', 'application/json')
+    for country in ep_countries:
 
-            response = urlopen(req, json.dumps(data).encode('utf-8'))
-        except HTTPError as e:
-            error_message = e.read()
-            print(error_message)
+        if country['slug'] == 'UK':
+            print('Skipping UK!')
 
-        # Check to see if the repo directory exists.
-        if not os.path.isdir(REPO_DIR):
+        else:
 
-            # No repo? Clone the JKAN directory.
-            Repo.clone_from(GITHUB_JKAN_URL, REPO_DIR)
+            print('COUNTRY: ' + country['name'].encode('utf-8'))
 
-        # Initialise the repository object
-        repo = Repo(REPO_DIR)
+            for legislature in country['legislatures']:
 
-        # Move the HEAD to the gh-pages branch
-        pages_branch = repo.create_head('gh-pages')
-        repo.head.reference = pages_branch
-        # Reset the index and working tree to match the pointed-to commit
-        repo.head.reset(index=True, working_tree=True)
+                print('\tLegislature ' + legislature['name'].encode('utf-8'))
 
-        # Pull so we're up to date
-        repo.remotes.origin.pull()
+                name = 'everypolitician-' + country['slug'].lower() + '-' + legislature['slug'].lower()
+                title = country['name'].encode('utf-8') + ' — ' + legislature['name'].encode('utf-8')
 
-        # Get the EP countries
-        response = urllib2.urlopen(EP_COUNTRIES_URL)
-        ep_countries = json.load(response)
-
-        for country in ep_countries:
-
-            if country['slug'] == 'UK':
-                print('Skipping UK!')
-
-            else:
-
-                yield '<p>Working on country ' + country['name'].encode('utf-8') + '.</p>'
-                print('Country ' + country['name'].encode('utf-8'))
-
-                for legislature in country['legislatures']:
-
-                    yield '<p>Working on legislature ' + legislature['name'].encode('utf-8') + '.</p>'
-                    print('\tLegislature ' + legislature['name'].encode('utf-8'))
-
-                    name = 'everypolitician-' + country['slug'].lower() + '-' + legislature['slug'].lower()
-                    title = country['name'].encode('utf-8') + ' — ' + legislature['name'].encode('utf-8')
-
-                    content = """---
+                content = """---
 schema: default
 title: >-
   Politician Data: """ + title + """
@@ -133,14 +109,14 @@ resources:
       """ + legislature['popolo_url'].encode('utf-8') + """
     format: json"""
 
-                    for period in legislature['legislative_periods']:
+                for period in legislature['legislative_periods']:
 
-                        if 'end_date' in period:
-                            date_string = period['start_date'] + ' to ' + period['end_date']
-                        else:
-                            date_string = 'From ' + period['start_date']
+                    if 'end_date' in period:
+                        date_string = period['start_date'] + ' to ' + period['end_date']
+                    else:
+                        date_string = 'From ' + period['start_date']
 
-                        content += """
+                    content += """
   - name: >-
       """ + period['name'].encode('utf-8') + """: """ + date_string.encode('utf-8') + """
     url: >-
@@ -166,42 +142,31 @@ more_info: """ + EP_MORE_INFO_URL + """
 ---
 """
 
-                with open(REPO_DIR + '/_datasets/' + name + '.md', 'w') as file:
-                    file.write(content)
+            with open(REPO_DIR + '/_datasets/' + name + '.md', 'w') as file:
+                file.write(content)
 
-        # Add all the tracked files to the repo. Do this using native git.
-        repo.git.add(A=True)
+    # Add all the tracked files to the repo. Do this using native git.
+    repo.git.add(A=True)
 
-        # Commit the index.
-        index = repo.index
+    # Commit the index.
+    index = repo.index
 
-        if index.diff('HEAD'):
+    if index.diff('HEAD'):
 
-            author = Actor("EveryPolitician", "team@everypolitician.org")
-            committer = Actor("DataBot", "data@mysociety.org")
-            # commit by commit message and author and committer
-            index.commit("Update EveryPolitician data", author=author, committer=committer)
+        author = Actor("EveryPolitician", "team@everypolitician.org")
+        committer = Actor("DataBot", "data@mysociety.org")
+        # commit by commit message and author and committer
+        index.commit("Update EveryPolitician data", author=author, committer=committer)
 
-            yield '<p>Committed changes.</p>'
-            print('Committed changes')
+        print('Committed changes')
 
-            # Push it!
-            repo.remotes.origin.push()
+        # Push it!
+        repo.remotes.origin.push()
 
-            yield '<p>Pushed changes.</p>'
-            print('Pushed changes')
+        print('Pushed changes')
 
-        else:
+    else:
 
-            yield '<p>Skipping commit, there is no difference.</p>'
-            print('Skipping commit, there is no difference')
+        print('Skipping commit, there is no difference')
 
-    return Response(
-        response=sync_to_jkan(request.get_json()),
-        mimetype='text/html'
-    )
-
-# Fire it up!
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+sync_to_jkan()
