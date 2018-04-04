@@ -130,6 +130,9 @@ resources:
   - name: Ruby
     url: 'https://github.com/everypolitician/everypolitician-popolo'
     format: library
+  - name: R
+    url: 'https://github.com/ajparsons/everypoliticianR'
+    format: library
 last_modified: """ + datetime.fromtimestamp(int(legislature['lastmod'])).isoformat() + """
 license: ''
 category:
